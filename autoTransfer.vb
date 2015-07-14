@@ -2,33 +2,49 @@
 '@mail: adonis.settouf@gmail.com
 
 Sub writeDatas()
-    Dim val As Variant, row As Long, range As String
+    Dim val As Variant, KAVal As Variant, row As Long, range As String, KARange As String, BAUVal As Variant, KACountry As Boolean
     Dim wb As Workbook
     Dim KAList
     KAList = Array("France", "UK", "Germany", "Spain", "Portugal", "Belgium", "Netherlands", "Norway")
-    MsgBox (KAList(0))
-    'Workbooks.Open ("C:\Users\asettouf\Documents\Projecto\Gab-Macro\phone_report_Full_May.xls")
     Set wb = findWorkbook("phone_report")
-    val = wb.Worksheets("PSSD combined").range("B4:G22").Value
-    'ThisWorkbook.Worksheets(val(1, 1)).Range("D127").Value = val(1, UBound(val, 2))
+    val = wb.Worksheets("PSSD combined").range("B4:G22").value
+    
     row = findRangeToWrite()
     range = "D" & CStr(row)
-    'MsgBox (range)
+    KARange = "P" & CStr(row)
     For i = 1 To (UBound(val, 1))
-      'MsgBox (ThisWorkbook.Worksheets(val(1, 1)).Name)
-      'MsgBox (val(i, 1))
-      If (InStr(val(i, 1), "Ireland") > 0) Then
-        ThisWorkbook.Worksheets("UK").range(range).Value = val(i, UBound(val, 2))
-      ElseIf (InStr(val(i, 1), "Africa") > 0) Then
-        ThisWorkbook.Worksheets("South Africa").range(range).Value = val(i, UBound(val, 2))
-      ElseIf (InStr(val(i, 1), "LexLIME") > 0) Then
         
-      Else
-        ThisWorkbook.Worksheets(val(i, 1)).range(range).Value = val(i, UBound(val, 2))
-      End If
+    Next
+    KAVal = wb.Worksheets("PSSD KA").range("B4:G22").value
+    BAUVal = wb.Worksheets("PSSD BAU").range("B4:G22").value
+
+    For i = 1 To (UBound(KAVal, 1))
+         For Each country In KAList
+            If (InStr(KAVal(i, 1), country)) > 0 Then
+                Call writeToSheet(range, BAUVal(i, UBound(BAUVal, 2)), KAVal(i, 1))
+                Call writeToSheet(KARange, KAVal(i, UBound(KAVal, 2)), country)
+                KACountry = True
+                Exit For
+            End If
+        KACountry = False
+        Next country
+        If Not KACountry Then
+            Call writeToSheet(range, val(i, UBound(val, 2)), val(i, 1))
+        End If
     Next
 End Sub
 
+'writeToTheGlobalForecast Workbook
+Function writeToSheet(ByVal range As String, ByVal value As Integer, ByVal country As String)
+    If (InStr(country, "Ireland") > 0) Then
+      ThisWorkbook.Worksheets("UK").range(range).value = value
+    ElseIf (InStr(country, "Africa") > 0) Then
+      ThisWorkbook.Worksheets("South Africa").range(range).value = value
+    ElseIf (InStr(country, "LexLIME") > 0) Then
+    Else
+      ThisWorkbook.Worksheets(country).range(range).value = value
+    End If
+End Function
 'Find the good row to write datas
 Function findRangeToWrite() As Long
     Dim lastRow As Long, firstRow As Long, counter As Long
@@ -36,7 +52,7 @@ Function findRangeToWrite() As Long
     counter = 0
     lastRow = ThisWorkbook.Worksheets("France").Cells.Find("*", searchorder:=xlByRows, searchdirection:=xlPrevious).row
     firstRow = lastRow - 23
-    val = ThisWorkbook.Worksheets("France").range("A" & CStr(firstRow) & ":B" & CStr(lastRow)).Value
+    val = ThisWorkbook.Worksheets("France").range("A" & CStr(firstRow) & ":B" & CStr(lastRow)).value
     'MsgBox (InStr(val(1, 1), CStr(Year(Date))))
     For i = 1 To UBound(val, 1)
         If (InStr(val(i, 1), CStr(Year(Date))) > 0 And InStr(MonthName(Month(Date) - 1), val(i, 2)) > 0) Then
@@ -48,7 +64,7 @@ Function findRangeToWrite() As Long
 End Function
 
 'find Workbooks with names (partial name ok)
-Function findWorkbook(nameWB As String) As Workbook
+Function findWorkbook(ByVal nameWB As String) As Workbook
     Dim buffWb As Workbook
     For Each book In Workbooks
         If (InStr(book.name, nameWB) > 0) Then
@@ -69,5 +85,6 @@ End Sub
 Private Sub TransferScript_Click()
     writeDatas
 End Sub
+
 
 
