@@ -1,5 +1,5 @@
 //@author: Adonis Settouf
-//@mail: adonis.settouf@gmail.com
+//@mail: asettouf@lexmark.com
 
 //Spreadsheet to write the numbers
 var spS = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
@@ -9,6 +9,7 @@ var rowToWrite = 2;
 var alias = Session.getActiveUser().getEmail();
 //Labels
 var labels = GmailApp.getUserLabels();
+//NUmber of columns without labels
 var colLen = 0;
 //working hours, see the 9 and 18
 var startWorkHours = 9;
@@ -17,7 +18,24 @@ var endWorkHours = 18;
 var slaThreshold = 4;
 //date previous week and this week (7 days)
 var arrDate = utilityDate_();
+//Siesta time
+var currWeek;
+//Number of threads
+var globalNumberOfThreads = 0;
+//Number of mails
+var globalNumberOfMails = 0;
+//global number of columns
+var globalColNum = 0;
+//Agent labels
+var agents = ["Geri", "Adonis","Alban","Barna"]
 
+function clearCache(){
+  var cache = CacheService.getScriptCache();
+  cache.put("lastThread", 0, 3600);
+  cache.put("rowToWrite", 2, 3600);
+  //cache.put("globalNumberOfMails", 0, 3600);
+  //cache.put("globalNumberOfThreads", 0, 3600);
+}
 //main function executing the the big loop
 function main(){
   spS = createSpreadsheet_(spS);
@@ -25,17 +43,29 @@ function main(){
   var cache = CacheService.getScriptCache();
   var cachedCount = cache.get("lastThread");
   var rowCount = cache.get("rowToWrite");
+  var cacheNumThread = cache.get("globalNumberOfThreads")
+  var cacheNumMail = cache.get("globalNumberOfMails")
   var i = cachedCount != null ? parseInt(cachedCount) :0;
   rowToWrite = rowCount != null ? parseInt(rowCount) : rowToWrite;
+  //globalNumberOfThreads = cacheNumThread != null ? parseInt(cacheNumThread) : globalNumberOfThreads;
+  //globalNumberOfMails = cacheNumMail != null ? parseInt(cacheNumMail) : globalNumberOfMails;
   var query = "NOT in:draft NOT in:chats NOT in:sent after:" + arrDate[0] + " before:" + arrDate[1];
+  //var query = "NOT in:draft NOT in:chats NOT in:sent after:2015/06/21 before:2015/06/29";
   Logger.log(query);
   var threads = GmailApp.search(query);
   for(i;i < threads.length; i++){
     //routine_(threads[i],threads[i].isInTrash() ? true:false);  lolz
     keepInCache_("rowToWrite", rowToWrite);
     routine_(threads[i]);
+    //keepInCache_("globalNumberOfThreads", globalNumberOfThreads.toString());
+    //keepInCache_("globalNumberOfMails", globalNumberOfMails.toString());
     keepInCache_("lastThread", i.toString());
   }
+  Logger.log("Incoming: " + globalNumberOfMails);
+  Logger.log("Incoming: " + globalNumberOfThreads);
+  writeDataInCell_(spS, globalNumberOfMails,2,globalColNum);
+  writeDataInCell_(spS, globalNumberOfThreads, 2 , globalColNum + 1);
+  
 }
 
 //keep counter in cache for next launch
@@ -47,11 +77,12 @@ function keepInCache_(name, counter){
 //utility to create new sheet each time
 function createSpreadsheet_(sps){
   var curr = new Date();
-  var mailWeek = (mailWeek_(curr)).toString();
+  currWeek = mailWeek_(curr);
+  var mailWeek = (currWeek).toString();
   SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().getName().indexOf("Datas") != -1 ? "": SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().setName("Datas for week: "+ mailWeek);
   if (sps.getRange(1,1).getValue() != ""){
     var sp = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Datas for week: "+ mailWeek) ? 
-        SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Datas for week: "+ mailWeek): SpreadsheetApp.getActiveSpreadsheet().insertSheet( "Datas for week: "+ mailWeek);
+      SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Datas for week: "+ mailWeek): SpreadsheetApp.getActiveSpreadsheet().insertSheet( "Datas for week: "+ mailWeek);
     return sp;
   }
   return SpreadsheetApp.getActiveSheet();
@@ -78,16 +109,19 @@ function init_(sps, row){
   writeDataInCell_(sps, "Number of mails per thread",row,col++);
   writeDataInCell_(sps, "Day of the week",row,col++);
   writeDataInCell_(sps, "Hour of the day",row,col++);
-  writeDataInCell_(sps, "SLA",row,col++);
-  writeDataInCell_(sps, "Time to answer",row,col++);
+  //writeDataInCell_(sps, "SLA",row,col++);
+  //writeDataInCell_(sps, "Time to answer",row,col++);
   colLen = col;
-  for (i = 0; i < labels.length; i++){
+   for (i = 0; i < labels.length; i++){
     writeDataInCell_(spS, labels[i].getName(),row, col++);
   }
+  globalColNum = col;
+  writeDataInCell_(sps, "Mail Count",1,col++);
+  writeDataInCell_(sps, "Thread Count", 1 ,col);
   while (sps.getRange(rowToWrite, 4).getValue() != ""){ //no overwriting of existing values
     rowToWrite++;
   }
-  boldingFirstRow_(sps, col + 1, row);
+  boldingFirstRow_(sps, col + 3, row);
   return rowToWrite;
 }
 
@@ -117,7 +151,11 @@ function routine_(thread){
   var isUnreadTime;
   var isReadString;
   var buffRow = [];
-  var areLabelsPresent = findLabel_(thread);
+  var countSth = 0;
+  var labs = thread.getLabels();
+  var areLabelsPresent = findLabel_(labs);
+  var mailWeek;
+  var receptDay;
   for(i;i<msgs.length;i++){
     if(msgs[i].getSubject().indexOf("Attachment") > -1){
       continue;
@@ -125,19 +163,38 @@ function routine_(thread){
     if(msgs[i].getDate() > arrDate[0]){
       continue;
     }
-    stripGetFrom_(msgs[i].getFrom()).indexOf(alias) > -1 ? rowForSla.push(rowToWrite): "";
-    col = 1;
-    isIncoming = checkIncoming_Mail_(msgs[i]);
-    incoming = isIncoming ? "INCOMING" : "OUTGOING";
-    arrToCc = checkToCc_(msgs[i]);
-    type2 = msgs[i].isInTrash() ? "Junk" : checkMailType_(msgs[i], isIncoming);
+    //watch out, parameters dateMail is modified through mailWeek func, not sure why though...
     dateMail = msgs[i].getDate();
     arrDayAndHour = findDayAndHour_(dateMail);
+    receptDay = Utilities.formatDate(dateMail, "CET", "dd/MM/yyyy");
+    Logger.log("BC: " + dateMail);
+    mailWeek = mailWeek_(dateMail);
+    Logger.log("AC: " + dateMail);
+    if( mailWeek != currWeek){
+      continue;
+    } else{
+      countSth++;
+    }
+    //stripGetFrom_(msgs[i].getFrom()).indexOf(alias) > -1 ? rowForSla.push(rowToWrite): "";
+    col = 1;
+    isIncoming = checkIncoming_Mail_(msgs[i]);
+    if (isIncoming) {
+      if (isIncrementMailCounter_(labs)){
+        globalNumberOfMails++;
+      }
+      incoming ="INCOMING"; 
+    } else{
+       incoming = "OUTGOING"; 
+    }
+    arrToCc = checkToCc_(msgs[i]);
+    type2 = msgs[i].isInTrash() ? "Junk" : checkMailType_(msgs[i], isIncoming);
+    
     isUnreadTime = isUnreadTime_(msgs[i]);
     isReadString = msgs[i].isUnread() ? "Yes" : "No";
     buffRow.push(rowToWrite);
-    writeDataInCell_(spS, Utilities.formatDate(dateMail, "CET", "dd/MM/yyyy"), rowToWrite, col++);
-    writeDataInCell_(spS, mailWeek_(dateMail), rowToWrite, col++);
+    
+    writeDataInCell_(spS,receptDay, rowToWrite, col++);
+    writeDataInCell_(spS, mailWeek, rowToWrite, col++);
     writeDataInCell_(spS, threadName, rowToWrite, col++);
     writeDataInCell_(spS, msgs[i].getFrom(), rowToWrite, col++);
     writeDataInCell_(spS, arrToCc[0], rowToWrite, col++);
@@ -151,17 +208,29 @@ function routine_(thread){
     writeDataInCell_(spS, arrDayAndHour[1], rowToWrite, col++);
     rowToWrite++;
   }
-  rowForSla.length > 0 ? col = checkSLA_(msgs, rowForSla, col): "";
+  //rowForSla.length > 0 ? col = checkSLA_(msgs, rowForSla, col): "";
   var j = 0;
   var colLab;
-  for(i=0;i<msgs.length;i++){
+  for(i=0;i<countSth;i++){
     colLab = colLen;
-    for (j = 0; j < areLabelsPresent.length; j++){
+     for (j = 0; j < areLabelsPresent.length; j++){
       writeDataInCell_(spS, areLabelsPresent[j], buffRow[i], colLab++);
     }
   }
 }
 
+//function to know if we increment global mail counter if mail is incoming and has an agent label
+function isIncrementMailCounter_(labs){
+  var i = 0;
+  for (i; i<labs.length; i++){
+    for(j=0; j < agents.length; j++){
+      if (agents[j].indexOf(labs[i].getName()) > -1 ){
+        return true;
+      }
+    }
+  }
+  return false;
+}
 //returns tab with day and hour from a date
 function findDayAndHour_(date){
   res = [];
@@ -171,12 +240,14 @@ function findDayAndHour_(date){
 }
 
 //find labels in a thread
-function findLabel_(thread){
-  var labs = thread.getLabels();
+function findLabel_(labs){
   var j = 0;
   var tt = [];
   for(j;j<labs.length;j++){
     tt.push(labs[j].getName());
+  }
+  if (isIncrementMailCounter_(labs)){
+    globalNumberOfThreads++;
   }
   var i = 0;
   var res = [];
@@ -248,6 +319,7 @@ function checkMailType_(mail, isIncoming){
 function utilityDate_(){
   var curr = new Date(); // get current date
   var dateLastWeek = new Date(curr.getTime() - 1000*60*60*24*7);
+  curr.setTime(curr.getTime() + 1000*3600*24);
   var thisWeek = Utilities.formatDate(curr, "CET", "yyyy/MM/dd");
   var lastWeek = Utilities.formatDate(dateLastWeek,"CET", "yyyy/MM/dd");
   var result = [lastWeek,thisWeek];
@@ -256,9 +328,9 @@ function utilityDate_(){
 
 //calculate simple week number
 /*function mailWeek_(date){
-var yearStart = new Date(date.getYear(),0,1);
-var weekNo = Math.ceil(( ( (date - yearStart) / 86400000) + 1)/7);
-return (weekNo>52) ? 52: weekNo;
+  var yearStart = new Date(date.getYear(),0,1);
+  var weekNo = Math.ceil(( ( (date - yearStart) / 86400000) + 1)/7);
+  return (weekNo>52) ? 52: weekNo;
 } */
 
 //calculate ISO week number (thanks to the author of this awesome piece of code!)
@@ -288,7 +360,7 @@ function mailWeek_(date){
   // The weeknumber is the number of weeks between the   
   // first thursday of the year and the thursday in the target week  
   var weekNo = 1 + Math.ceil((firstThursday - target) / 604800000);
-  return (weekNo > 52) ? 52: weekNo; 
+  return weekNo; 
 }
 
 //check if Incoming or Outgoing thread
@@ -353,8 +425,10 @@ function resetDateWithShift_(dateIncoming){
 //calculate time to add to compute SLA
 function utilitySecondConverter_(dateIncoming, dateAnswer){
   dateIncoming = resetDateWithShift_(dateIncoming);
+  //var siesta = (siestaTimeStart && siestaTimeEnd);
   var sla = 0;
   do{
+    //sla -= siesta ? calculateSlaWithSiesta_(dateIncoming, dateAnswer): 0;
     if(dateIncoming.getDate() == dateAnswer.getDate()) {
       Logger.log("Date answer: " + dateAnswer);
       dateAnswer = resetDateWithShift_(dateAnswer);
@@ -370,7 +444,30 @@ function utilitySecondConverter_(dateIncoming, dateAnswer){
   return sla;
 }
 
-
+//compute the diff with sleep time
+function calculateSlaWithSiesta_(dateIncoming, dateAnswer){
+  var totalSiesta = 0;
+  if(dateIncoming.getDate() == dateAnswer.getDate()) {
+      dateAnswer = resetDateWithShift_(dateAnswer);
+    if(dateIncoming.getHours() < 12){
+      if (dateAnswer.getHours() >= 13){
+        totalSiesta ++;
+      } else if(dateAnswer == 12){
+        totalSiesta += siestaEndTime - dateAnswer.getTime()/(60*60*1000);
+      }
+    } else if(dateIncoming.getHours() == 12){
+      if (dateAnswer.getHours() >= 13){
+        totalSiesta += siestaEndTime - dateIncoming.getHours();
+      } else if(dateAnswer == 12){
+        totalSiesta += (dateAnswer.getTime() - dateIncoming.getTime())/(60*60*1000);
+        }
+      }
+  } else{
+      totalSiesta += dateIncoming.getHours() <= siestaTimeStart  ? 1:0
+  }
+  return totalSiesta
+  
+}
 
 
 //check if SLA Treshold is respected
@@ -385,12 +482,12 @@ function checkThresholdForSLA_(thresholdAnswer){
 //return array with answers to the thread
 function findAnswers_(messages){
   if(messages.length > 1){
-    var i = 0;
-    var res = [];
-    for(i; i < messages.length; i++){
-      var sender = stripGetFrom_(messages[i].getFrom());
-      (sender.indexOf(alias) != -1) ? res.push(messages[i]):"";
-    }
+   var i = 0;
+   var res = [];
+   for(i; i < messages.length; i++){
+     var sender = stripGetFrom_(messages[i].getFrom());
+     (sender.indexOf(alias) != -1) ? res.push(messages[i]):"";
+   }
     return res;
   }
   return false;
