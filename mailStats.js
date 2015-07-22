@@ -1,5 +1,7 @@
 //@author: Adonis Settouf
 //@mail: asettouf@lexmark.com
+//ToDo: improve the cache system
+
 
 //Spreadsheet to write the numbers
 var spS = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
@@ -43,14 +45,14 @@ function main(){
   var cache = CacheService.getScriptCache();
   var cachedCount = cache.get("lastThread");
   var rowCount = cache.get("rowToWrite");
-  var cacheNumThread = cache.get("globalNumberOfThreads")
-  var cacheNumMail = cache.get("globalNumberOfMails")
+  var cacheNumThread = cache.get("globalNumberOfThreads");
+  var cacheNumMail = cache.get("globalNumberOfMails");
   var i = cachedCount != null ? parseInt(cachedCount) :0;
   rowToWrite = rowCount != null ? parseInt(rowCount) : rowToWrite;
   //globalNumberOfThreads = cacheNumThread != null ? parseInt(cacheNumThread) : globalNumberOfThreads;
   //globalNumberOfMails = cacheNumMail != null ? parseInt(cacheNumMail) : globalNumberOfMails;
   var query = "NOT in:draft NOT in:chats NOT in:sent after:" + arrDate[0] + " before:" + arrDate[1];
-  //var query = "NOT in:draft NOT in:chats NOT in:sent after:2015/06/21 before:2015/06/29";
+  //var query = "NOT in:draft NOT in:chats NOT in:sent after:2015/07/05 before:2015/07/13";
   Logger.log(query);
   var threads = GmailApp.search(query);
   for(i;i < threads.length; i++){
@@ -77,7 +79,7 @@ function keepInCache_(name, counter){
 //utility to create new sheet each time
 function createSpreadsheet_(sps){
   var curr = new Date();
-  currWeek = mailWeek_(curr);
+  currWeek = str(int(mailWeek_(curr)) - 1);
   var mailWeek = (currWeek).toString();
   SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().getName().indexOf("Datas") != -1 ? "": SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().setName("Datas for week: "+ mailWeek);
   if (sps.getRange(1,1).getValue() != ""){
