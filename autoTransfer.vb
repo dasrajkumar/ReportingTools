@@ -2,26 +2,24 @@
 '@mail: adonis.settouf@gmail.com
 
 Sub writeDatas()
-    Dim val As Variant, KAVal As Variant, row As Long, range As String, KARange As String, BAUVal As Variant, KACountry As Boolean
+    Dim val As Variant, KAVal As Variant, row As Long, Range As String, KARange As String, BAUVal As Variant, KACountry As Boolean
     Dim wb As Workbook
-    Dim KAList
+    Dim KAList As Variant
+    Application.Calculation = xlCalculationManual
     KAList = Array("France", "UK", "Germany", "Spain", "Portugal", "Belgium", "Netherlands", "Norway")
     Set wb = findWorkbook("phone_report")
-    val = wb.Worksheets("PSSD combined").range("B4:G22").value
+    val = wb.Worksheets("PSSD combined").Range("B4:G22").value
     
     row = findRangeToWrite()
-    range = "D" & CStr(row)
+    Range = "D" & CStr(row)
     KARange = "P" & CStr(row)
-    For i = 1 To (UBound(val, 1))
-        
-    Next
-    KAVal = wb.Worksheets("PSSD KA").range("B4:G22").value
-    BAUVal = wb.Worksheets("PSSD BAU").range("B4:G22").value
+    KAVal = wb.Worksheets("PSSD KA").Range("B4:G22").value
+    BAUVal = wb.Worksheets("PSSD BAU").Range("B4:G22").value
 
     For i = 1 To (UBound(KAVal, 1))
          For Each country In KAList
             If (InStr(KAVal(i, 1), country)) > 0 Then
-                Call writeToSheet(range, BAUVal(i, UBound(BAUVal, 2)), KAVal(i, 1))
+                Call writeToSheet(Range, BAUVal(i, UBound(BAUVal, 2)), KAVal(i, 1))
                 Call writeToSheet(KARange, KAVal(i, UBound(KAVal, 2)), country)
                 KACountry = True
                 Exit For
@@ -29,20 +27,21 @@ Sub writeDatas()
         KACountry = False
         Next country
         If Not KACountry Then
-            Call writeToSheet(range, val(i, UBound(val, 2)), val(i, 1))
+            Call writeToSheet(Range, val(i, UBound(val, 2)), val(i, 1))
         End If
     Next
+    Application.Calculation = xlCalculationAutomatic
 End Sub
 
 'writeToTheGlobalForecast Workbook
-Function writeToSheet(ByVal range As String, ByVal value As Integer, ByVal country As String)
+Function writeToSheet(ByVal Range As String, ByVal value As Integer, ByVal country As String)
     If (InStr(country, "Ireland") > 0) Then
-      ThisWorkbook.Worksheets("UK").range(range).value = value
+      ThisWorkbook.Worksheets("UK").Range(Range).value = value
     ElseIf (InStr(country, "Africa") > 0) Then
-      ThisWorkbook.Worksheets("South Africa").range(range).value = value
+      ThisWorkbook.Worksheets("South Africa").Range(Range).value = value
     ElseIf (InStr(country, "LexLIME") > 0) Then
     Else
-      ThisWorkbook.Worksheets(country).range(range).value = value
+      ThisWorkbook.Worksheets(country).Range(Range).value = value
     End If
 End Function
 'Find the good row to write datas
@@ -52,7 +51,7 @@ Function findRangeToWrite() As Long
     counter = 0
     lastRow = ThisWorkbook.Worksheets("France").Cells.Find("*", searchorder:=xlByRows, searchdirection:=xlPrevious).row
     firstRow = lastRow - 23
-    val = ThisWorkbook.Worksheets("France").range("A" & CStr(firstRow) & ":B" & CStr(lastRow)).value
+    val = ThisWorkbook.Worksheets("France").Range("A" & CStr(firstRow) & ":B" & CStr(lastRow)).value
     'MsgBox (InStr(val(1, 1), CStr(Year(Date))))
     For i = 1 To UBound(val, 1)
         If (InStr(val(i, 1), CStr(Year(Date))) > 0 And InStr(MonthName(Month(Date) - 1), val(i, 2)) > 0) Then
@@ -88,3 +87,7 @@ End Sub
 
 
 
+
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+
+End Sub
