@@ -73,12 +73,27 @@ Function findWorkbook(ByVal nameWB As String) As Workbook
     Next book
 End Function
 
+'Function to find column letter with a column name in the two first rows in a given worksheet (watch out, check only on the two first rows
+'and return first one that contains the searched string, so be very specific
+Function findColumnLetter(ByVal name As String, ByVal ws As Worksheet) As String
+    Dim counter As Integer
+    counter = 1
+    For i = 1 To 2
+        For j = 1 To ws.Columns.Count
+            If InStr(ws.Cells(i, j).value, name) > 0 Then
+                counter = j
+                Exit For
+            End If
+        Next
+    Next
+    findColumnLetter = Chr(64 + counter)
+End Function
 
 'Proc for testing new func
 Sub test()
-   Dim wb As Workbook
-   Set wb = findWorkbook("phone_report")
-   MsgBox (wb.name)
+   Dim col As String
+   col = findColumnLetter("BAU NVC", ThisWorkbook.Worksheets("France"))
+   MsgBox (col)
 End Sub
 
 Private Sub TransferScript_Click()
@@ -87,7 +102,3 @@ End Sub
 
 
 
-
-Private Sub Worksheet_SelectionChange(ByVal Target As Range)
-
-End Sub
