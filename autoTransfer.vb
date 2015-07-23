@@ -2,7 +2,7 @@
 '@mail: adonis.settouf@gmail.com
 
 Sub writeDatas()
-    Dim val As Variant, KAVal As Variant, row As Long, Range As String, KARange As String, BAUVal As Variant, KACountry As Boolean
+    Dim val As Variant, KAVal As Variant, row As Long, BAUCallOffered As String, KARange As String, BAUVal As Variant, KACountry As Boolean
     Dim wb As Workbook
     Dim KAList As Variant
     Application.Calculation = xlCalculationManual
@@ -10,40 +10,49 @@ Sub writeDatas()
     Set wb = findWorkbook("phone_report")
     val = wb.Worksheets("PSSD combined").Range("B4:G22").value
     
-    row = findRangeToWrite()
-    Range = "D" & CStr(row)
-    KARange = "P" & CStr(row)
+    
+    BAUCallOffered = "BAU Call offered"
+    KARange = "KA Call offered"
     KAVal = wb.Worksheets("PSSD KA").Range("B4:G22").value
     BAUVal = wb.Worksheets("PSSD BAU").Range("B4:G22").value
-
     For i = 1 To (UBound(KAVal, 1))
          For Each country In KAList
             If (InStr(KAVal(i, 1), country)) > 0 Then
-                Call writeToSheet(Range, BAUVal(i, UBound(BAUVal, 2)), KAVal(i, 1))
-                Call writeToSheet(KARange, KAVal(i, UBound(KAVal, 2)), country)
+                Call writeToSheet(BAUCallOffered, BAUVal(i, UBound(BAUVal, 2)), KAVal(i, 1))
+                Call writeToSheet(KARange, KAVal(i, UBound(KAVal, 2)), KAVal(i, 1))
                 KACountry = True
                 Exit For
             End If
         KACountry = False
         Next country
         If Not KACountry Then
-            Call writeToSheet(Range, val(i, UBound(val, 2)), val(i, 1))
+            Call writeToSheet(BAUCallOffered, val(i, UBound(val, 2)), val(i, 1))
         End If
     Next
     Application.Calculation = xlCalculationAutomatic
 End Sub
 
 'writeToTheGlobalForecast Workbook
-Function writeToSheet(ByVal Range As String, ByVal value As Integer, ByVal country As String)
+Function writeToSheet(ByVal colName As String, ByVal value As Integer, ByVal country As String)
+    Dim ran As String, row As Long, realCountry As String
+    row = findRangeToWrite()
     If (InStr(country, "Ireland") > 0) Then
-      ThisWorkbook.Worksheets("UK").Range(Range).value = value
+       realCountry = "UK"
     ElseIf (InStr(country, "Africa") > 0) Then
-      ThisWorkbook.Worksheets("South Africa").Range(Range).value = value
-    ElseIf (InStr(country, "LexLIME") > 0) Then
+       realCountry = "South Africa"
     Else
-      ThisWorkbook.Worksheets(country).Range(Range).value = value
+       realCountry = country
     End If
+    If (InStr(country, "LexLIME") > 0) Then
+    Else
+        
+        ran = findColumnLetter(colName, ThisWorkbook.Worksheets(realCountry)) & CStr(row)
+        ThisWorkbook.Worksheets(realCountry).Range(ran).value = value
+    End If
+    
+    
 End Function
+
 'Find the good row to write datas
 Function findRangeToWrite() As Long
     Dim lastRow As Long, firstRow As Long, counter As Long
@@ -99,6 +108,7 @@ End Sub
 Private Sub TransferScript_Click()
     writeDatas
 End Sub
+
 
 
 
