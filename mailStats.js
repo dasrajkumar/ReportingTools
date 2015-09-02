@@ -24,8 +24,12 @@ var arrDate = utilityDate_();
 var currWeek;
 //Number of threads
 var globalNumberOfThreads = 0;
-//Number of mails
+//Number of incoming mails
 var globalNumberOfMails = 0;
+//Number of outgoing mails
+var globalNumberOfOutgoingMails = 0;
+//Number of mails sent automatically
+var numberOfAutoResponseMails = 0;
 //global number of columns
 var globalColNum = 0;
 //Agent labels
@@ -52,21 +56,25 @@ function main(){
   //globalNumberOfThreads = cacheNumThread != null ? parseInt(cacheNumThread) : globalNumberOfThreads;
   //globalNumberOfMails = cacheNumMail != null ? parseInt(cacheNumMail) : globalNumberOfMails;
   var query = "NOT in:draft NOT in:chats NOT in:sent after:" + arrDate[0] + " before:" + arrDate[1];
-  //var query = "NOT in:draft NOT in:chats NOT in:sent after:2015/07/05 before:2015/07/13";
+  //var query = "NOT in:draft NOT in:chats NOT in:sent after:2015/07/18 before:2015/07/26";
   Logger.log(query);
   var threads = GmailApp.search(query);
   for(i;i < threads.length; i++){
     //routine_(threads[i],threads[i].isInTrash() ? true:false);  lolz
     keepInCache_("rowToWrite", rowToWrite);
     routine_(threads[i]);
+    
     //keepInCache_("globalNumberOfThreads", globalNumberOfThreads.toString());
     //keepInCache_("globalNumberOfMails", globalNumberOfMails.toString());
     keepInCache_("lastThread", i.toString());
   }
   Logger.log("Incoming: " + globalNumberOfMails);
   Logger.log("Incoming: " + globalNumberOfThreads);
+  Logger.log("Number of auto mails: " + numberOfAutoResponseMails);
+  Logger.log("Number of response mails: " + globalNumberOfOutgoingMails);
   writeDataInCell_(spS, globalNumberOfMails,2,globalColNum);
   writeDataInCell_(spS, globalNumberOfThreads, 2 , globalColNum + 1);
+  writeDataInCell_(spS, globalNumberOfOutgoingMails - numberOfAutoResponseMails, 2 , globalColNum + 2);
   
 }
 
@@ -79,7 +87,7 @@ function keepInCache_(name, counter){
 //utility to create new sheet each time
 function createSpreadsheet_(sps){
   var curr = new Date();
-  currWeek = str(int(mailWeek_(curr)) - 1);
+  currWeek = String(parseInt(mailWeek_(curr)) - 1);
   var mailWeek = (currWeek).toString();
   SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().getName().indexOf("Datas") != -1 ? "": SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().setName("Datas for week: "+ mailWeek);
   if (sps.getRange(1,1).getValue() != ""){
@@ -119,7 +127,8 @@ function init_(sps, row){
   }
   globalColNum = col;
   writeDataInCell_(sps, "Mail Count",1,col++);
-  writeDataInCell_(sps, "Thread Count", 1 ,col);
+  writeDataInCell_(sps, "Thread Count", 1 ,col++);
+  writeDataInCell_(sps, "Outgoing Mail Count", 1 ,col);
   while (sps.getRange(rowToWrite, 4).getValue() != ""){ //no overwriting of existing values
     rowToWrite++;
   }
@@ -169,9 +178,9 @@ function routine_(thread){
     dateMail = msgs[i].getDate();
     arrDayAndHour = findDayAndHour_(dateMail);
     receptDay = Utilities.formatDate(dateMail, "CET", "dd/MM/yyyy");
-    Logger.log("BC: " + dateMail);
+    //Logger.log("BC: " + dateMail);
     mailWeek = mailWeek_(dateMail);
-    Logger.log("AC: " + dateMail);
+    //Logger.log("AC: " + dateMail);
     if( mailWeek != currWeek){
       continue;
     } else{
@@ -186,8 +195,10 @@ function routine_(thread){
       }
       incoming ="INCOMING"; 
     } else{
-       incoming = "OUTGOING"; 
+       incoming = "OUTGOING";
+       globalNumberOfOutgoingMails++;
     }
+      
     arrToCc = checkToCc_(msgs[i]);
     type2 = msgs[i].isInTrash() ? "Junk" : checkMailType_(msgs[i], isIncoming);
     
@@ -219,6 +230,24 @@ function routine_(thread){
       writeDataInCell_(spS, areLabelsPresent[j], buffRow[i], colLab++);
     }
   }
+  if(countSth && !isLFMNA_(labs)){
+    if (checkIncoming_(msgs)){
+      Logger.log("Incoming thread: " + threadName);
+      numberOfAutoResponseMails++;
+    }
+    if (isIncrementMailCounter_(labs)){
+      globalNumberOfThreads++;
+    }
+  }
+}
+
+//check if thread is LFM NA
+function isLFMNA_(labels){
+  if(labels.length == 1 && labels[0].getName().indexOf("L F M") > -1){
+    return true;
+  } else{
+    return false;
+  }
 }
 
 //function to know if we increment global mail counter if mail is incoming and has an agent label
@@ -248,9 +277,7 @@ function findLabel_(labs){
   for(j;j<labs.length;j++){
     tt.push(labs[j].getName());
   }
-  if (isIncrementMailCounter_(labs)){
-    globalNumberOfThreads++;
-  }
+  
   var i = 0;
   var res = [];
   for (i;i<labels.length;i++){
